@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, BadRequestException, ConflictException } from '@nestjs/common';
+import { CreateUserDto, UpdateUserDto } from './user.dto';
 
 interface User {
   id: string;
@@ -29,7 +30,7 @@ export class UsersController {
   }
 
   @Post()
-  createUser(@Body() body: User) {
+  createUser(@Body() body: CreateUserDto) {
     if (!body.name || !body.email) {
       throw new BadRequestException('Name and email are required');
     }
@@ -46,7 +47,7 @@ export class UsersController {
   }
 
   @Put(':id')
-  updateUser(@Param('id') id: string, @Body() body: User) {
+  updateUser(@Param('id') id: string, @Body() body: UpdateUserDto) {
     if (!body.name && !body.email) {
       throw new BadRequestException('At least one field (name or email) is required for update');
     }
