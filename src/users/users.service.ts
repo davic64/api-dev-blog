@@ -1,70 +1,114 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { User } from './user.model';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateUserDto } from './user.dto';
+import { UpdateUserDto } from './user.dto';
 
 @Injectable()
 export class UsersService {
-  private users: User[] = [
-    { id: '1', name: 'Alice', email: 'alice@mail.com' },
-    { id: '2', name: 'Bob', email: 'bob@mail.com' },
-    { id: '3', name: 'Charlie', email: 'charlie@mail.com' },
-  ];
+  constructor(private prisma: PrismaService) {}
 
-  findAll() {
-    return this.users;
+  async findAll() {
+    return this.prisma.user.findMany({
+      include: {
+        Profile: true,
+      },
+    });
   }
 
-  findOne(id: string) {
-    const user = this.users.find((user) => user.id === id);
+  async findOne(id: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        Profile: true,
+      },
+    });
+
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
     return user;
   }
 
-  create(body: Omit<User, 'id'>) {
-    if (!body.name || !body.email) {
-      throw new BadRequestException('Name and email are required');
+  async create(createUserDto: CreateUserDto) {
+    const { email, password, profile } = createUserDto;
+
+    if (!email || !password) {
+      throw new BadRequestException('Email and password are required');
     }
 
-    const existingUser = this.users.find((user) => user.email === body.email);
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
     if (existingUser) {
       throw new ConflictException('Email already exists');
     }
 
-    const id: string = String(this.users.length + 1);
-    const newUser = { ...body, id };
-    this.users.push(newUser);
-    return newUser;
+    return this.prisma.user.create({
+      data: {
+        email,
+        password,
+        Profile: {
+          create: profile,
+        },
+      },
+      include: {
+        Profile: true,
+      },
+    });
   }
 
-  update(id: string, updates: Partial<Omit<User, 'id'>>) {
-    if (!updates.name && !updates.email) {
-      throw new BadRequestException('At least one field (name or email) is required for update');
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    const { email, password } = updateUserDto;
+
+    if (!email && !password) {
+      throw new BadRequestException('At least one field (email or password) is required for update');
     }
 
-    const userIndex = this.users.findIndex((user) => user.id === id);
-    if (userIndex === -1) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!existingUser) {
       throw new NotFoundException('User not found');
     }
 
-    if (updates.email && updates.email !== this.users[userIndex].email) {
-      const emailExists = this.users.some((user) => user.email === updates.email);
+    if (email && email !== existingUser.email) {
+      const emailExists = await this.prisma.user.findUnique({
+        where: { email },
+      });
+
       if (emailExists) {
         throw new ConflictException('Email already exists');
       }
     }
 
-    this.users[userIndex] = { ...this.users[userIndex], ...updates };
-    return this.users[userIndex];
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        email,
+        password,
+      },
+      include: {
+        Profile: true,
+      },
+    });
   }
 
-  delete(id: string) {
-    const userIndex = this.users.findIndex((user) => user.id === id);
-    if (userIndex === -1) {
+  async delete(id: number) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!existingUser) {
       throw new NotFoundException('User not found');
     }
 
-    this.users = this.users.filter((user) => user.id !== id);
+    await this.prisma.user.delete({
+      where: { id },
+    });
+
     return { message: 'User deleted successfully' };
   }
 }
