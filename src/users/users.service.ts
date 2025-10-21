@@ -1,7 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateUserDto } from './user.dto';
-import { UpdateUserDto } from './user.dto';
+import { CreateUserDto, UpdateUserDto } from './dtos/user.dto';
 
 @Injectable()
 export class UsersService {
@@ -60,15 +59,13 @@ export class UsersService {
   }
 
   async update(id: number, updateUserDto: UpdateUserDto) {
-    const { email, password } = updateUserDto;
+    const { email, password, profile } = updateUserDto;
 
-    if (!email && !password) {
-      throw new BadRequestException('At least one field (email or password) is required for update');
+    if (!email && !password && !profile) {
+      throw new BadRequestException('At least one field (email, password, or profile) is required for update');
     }
 
-    const existingUser = await this.prisma.user.findUnique({
-      where: { id },
-    });
+    const existingUser = await this.findOne(id);
 
     if (!existingUser) {
       throw new NotFoundException('User not found');
@@ -84,12 +81,30 @@ export class UsersService {
       }
     }
 
+    const updateData: {
+      email?: string;
+      password?: string;
+      Profile?: {
+        update?: any;
+        create?: any;
+      };
+    } = {};
+
+    if (email) updateData.email = email;
+    if (password) updateData.password = password;
+
+    if (profile) {
+      if (existingUser.Profile) {
+        // Update existing profile
+        updateData.Profile = {
+          update: profile,
+        };
+      }
+    }
+
     return this.prisma.user.update({
       where: { id },
-      data: {
-        email,
-        password,
-      },
+      data: updateData,
       include: {
         Profile: true,
       },
@@ -104,6 +119,11 @@ export class UsersService {
     if (!existingUser) {
       throw new NotFoundException('User not found');
     }
+
+    // Delete the profile first to avoid foreign key constraint violation
+    await this.prisma.profile.delete({
+      where: { userId: id },
+    });
 
     await this.prisma.user.delete({
       where: { id },
